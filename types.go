@@ -191,6 +191,12 @@ type SnapshotInput struct {
 	Encryption   *EncryptionMeta   `json:"encryption,omitempty"`
 }
 
+
+type SnapshotEncryptionUpdate struct {
+	WrappedDEK string          `json:"wrappedDek"`
+	Encryption *EncryptionMeta `json:"encryption,omitempty"`
+}
+
 type SnapshotTreeResponse struct {
 	SnapshotID   string `json:"snapshotId"`
 	RootTreeHash string `json:"rootTreeHash"`

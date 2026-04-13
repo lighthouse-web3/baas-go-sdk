@@ -43,3 +43,6 @@ dependency using your usual Go module workflow.
 - When encryption is enabled: create or open a **keyfile**, wrap the snapshot  
 **DEK** with the **TMK**, and derive per-chunk / per-tree keys for encrypting  
 and decrypting stored blobs.
+- **TMK rotation**: re-wrap every snapshot's DEK under a new TMK without
+re-encrypting any data blobs.
+

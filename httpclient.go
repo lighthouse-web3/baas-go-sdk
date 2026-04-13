@@ -127,6 +127,12 @@ func (c *HttpClient) DeleteSnapshot(snapshotID string) (DeleteSnapshotResponse, 
 	return resp, err
 }
 
+func (c *HttpClient) UpdateSnapshotEncryption(snapshotID string, body SnapshotEncryptionUpdate) (Snapshot, error) {
+	var resp Snapshot
+	err := c.request("PATCH", "/backup/snapshots/"+snapshotID, body, &resp)
+	return resp, err
+}
+
 // ── Restore ─────────────────────────────────────────────────────────────────
 
 func (c *HttpClient) RequestDownloadURLs(hashes []string) (PackDownloadResponse, error) {

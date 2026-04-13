@@ -184,6 +184,31 @@ func UnwrapDEK(tmk []byte, wrappedB64 string) ([]byte, error) {
 	return aesGCMOpen(tmk, nonce, ciphertext)
 }
 
+// RewrapDEK unwraps wrappedB64 with oldTMK and re-wraps the recovered DEK with newTMK.
+func RewrapDEK(oldTMK, newTMK []byte, wrappedB64 string) (string, error) {
+	dek, err := UnwrapDEK(oldTMK, wrappedB64)
+	if err != nil {
+		return "", fmt.Errorf("unwrap with old TMK: %w", err)
+	}
+	return WrapDEK(newTMK, dek)
+}
+
+func RewrapDEKIdempotent(oldTMK, newTMK []byte, wrappedB64 string) (string, bool, error) {
+	dek, err := UnwrapDEK(oldTMK, wrappedB64)
+	if err == nil {
+		rewrapped, werr := WrapDEK(newTMK, dek)
+		if werr != nil {
+			return "", false, werr
+		}
+		return rewrapped, true, nil
+	}
+	// Old TMK failed; check whether newTMK already works (already rotated).
+	if _, err2 := UnwrapDEK(newTMK, wrappedB64); err2 == nil {
+		return wrappedB64, false, nil
+	}
+	return "", false, fmt.Errorf("unwrap failed with both old and new TMK: %w", err)
+}
+
 // ── HKDF key derivation ────────────────────────────────────────────────────
 
 var hkdfSalt = make([]byte, 32) // 32 zero bytes — fixed salt

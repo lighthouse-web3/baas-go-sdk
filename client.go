@@ -142,6 +142,22 @@ func (c *BackupClient) GetUsage() (Usage, error) {
 	return c.HTTP.GetUsage()
 }
 
+// UpdateSnapshotEncryption atomically replaces the wrappedDek during TMK rotation.
+func (c *BackupClient) UpdateSnapshotEncryption(snapshotID string, body SnapshotEncryptionUpdate) (Snapshot, error) {
+	if err := c.ensureAuth(); err != nil {
+		return Snapshot{}, err
+	}
+	return c.HTTP.UpdateSnapshotEncryption(snapshotID, body)
+}
+
+// RotateTMK rewraps the DEK of a single snapshot from oldTMK to newTMK
+func (c *BackupClient) RotateTMK(snapshotID string, oldTMK, newTMK []byte) (Snapshot, bool, error) {
+	if err := c.ensureAuth(); err != nil {
+		return Snapshot{}, false, err
+	}
+	return RotateSnapshotTMK(c.HTTP, snapshotID, oldTMK, newTMK)
+}
+
 // ── internal ────────────────────────────────────────────────────────────────
 
 func buildWallet(opts BackupClientOptions) (*WalletAdapter, error) {
