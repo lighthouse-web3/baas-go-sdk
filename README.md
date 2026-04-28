@@ -80,9 +80,6 @@ func main() {
 }
 ```
 
-See [MIGRATION.md](./MIGRATION.md) for guidance when upgrading from
-wallet-scoped releases.
-
 ## Package layout
 
 - `client`: high-level SDK client and orchestration surface.
