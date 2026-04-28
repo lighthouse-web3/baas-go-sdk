@@ -1,4 +1,4 @@
-module github.com/lighthouse-web3/backup-sdk-go
+module github.com/lighthouse-web3/baas-go-sdk
 
 go 1.24
 

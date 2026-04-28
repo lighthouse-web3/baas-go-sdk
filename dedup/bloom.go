@@ -1,17 +1,13 @@
-package backup
+package dedup
 
 import (
 	"encoding/base64"
 	"strconv"
+
+	sdktypes "github.com/lighthouse-web3/baas-go-sdk/types"
 )
 
 // BloomFilter provides fast probabilistic membership testing.
-//
-// Cross-language spec (must be identical in every SDK):
-//
-//	h1 = parse_uint32_hex(hash[0:8])
-//	h2 = parse_uint32_hex(hash[8:16])
-//	position_i = (h1 + i * h2) % numBits
 type BloomFilter struct {
 	bytes     []byte
 	numBits   uint32
@@ -19,7 +15,7 @@ type BloomFilter struct {
 }
 
 // NewBloomFilter creates a bloom filter from a server response.
-func NewBloomFilter(resp BloomResponse) (*BloomFilter, error) {
+func NewBloomFilter(resp sdktypes.BloomResponse) (*BloomFilter, error) {
 	data, err := base64.StdEncoding.DecodeString(resp.Data)
 	if err != nil {
 		return nil, err
@@ -31,7 +27,7 @@ func NewBloomFilter(resp BloomResponse) (*BloomFilter, error) {
 	}, nil
 }
 
-// Test returns true if the hash might exist in the filter (may be a false positive).
+// Test returns true if the hash might exist in the filter.
 func (bf *BloomFilter) Test(hash string) bool {
 	h1 := parseHex32(hash[0:8])
 	h2 := parseHex32(hash[8:16])
@@ -49,12 +45,11 @@ func parseHex32(s string) uint32 {
 	return uint32(v)
 }
 
-// EmptyBloom returns a bloom filter that reports everything as "new".
 type emptyBloom struct{}
 
 func (emptyBloom) Test(_ string) bool { return false }
 
-// BloomTester is the interface shared by BloomFilter and the empty sentinel.
+// BloomTester is the interface shared by BloomFilter and empty sentinel.
 type BloomTester interface {
 	Test(hash string) bool
 }

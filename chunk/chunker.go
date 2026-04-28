@@ -1,42 +1,14 @@
-package backup
+package chunk
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
 	"os"
+
+	sdktypes "github.com/lighthouse-web3/baas-go-sdk/types"
 )
 
-// FastCDC (Fast Content-Defined Chunking)
-//
-// Gear-hash rolling-hash implementation inspired by restic and kopia.
-// Produces variable-size chunks whose boundaries are determined by file
-// content, enabling cross-file deduplication.
-//
-// CROSS-LANGUAGE SPEC:
-//
-//  1. Use the hardcoded gearTable (256 × uint32).
-//     Derivation: gearTable[i] = uint32_le( sha256( byte(i) )[0..3] )
-//
-//  2. Rolling hash (unsigned 32-bit):
-//     gear_hash = ((gear_hash << 1) + gearTable[byte]) & 0xFFFFFFFF
-//
-//  3. Mask computation — pure integer, no floating-point:
-//     bits = floor_log2(avgSize)
-//     maskS = (1 << (bits + 1)) - 1
-//     maskL = (1 << (bits - 1)) - 1
-//
-//  4. Cut logic per byte at position len (1-based from chunk start):
-//     if len < minSize → continue
-//     if len >= maxSize → cut
-//     if len < avgSize  → cut when (gear_hash & maskS) == 0
-//     else              → cut when (gear_hash & maskL) == 0
-//
-//  5. After every cut, reset gear_hash = 0.
-//  6. Remaining bytes after EOF form the final chunk.
-//  7. Chunk hash = lowercase hex SHA-256 of the raw chunk bytes.
-
-// gearTable: GEAR[i] = first 4 bytes of SHA-256(byte i), read as uint32 little-endian.
 var gearTable = [256]uint32{
 	0x9c0b346e, 0x2f12f54b, 0xc9b4c1db, 0x08ed4f08, 0x509c2de5, 0x9a9a7be7, 0x986e5867, 0x588735ca,
 	0x79d7eabe, 0x2f344c2b, 0x1947ba01, 0xa046cfe7, 0x21bd6cef, 0x2d0e1e9d, 0xf73e7b4d, 0x369c0edc,
@@ -95,7 +67,7 @@ type Chunker struct {
 }
 
 // NewChunker creates a Chunker with the given options.
-func NewChunker(opts ChunkOptions) *Chunker {
+func NewChunker(opts sdktypes.ChunkOptions) *Chunker {
 	bits := ilog2(opts.AvgSize)
 	return &Chunker{
 		minSize: opts.MinSize,
@@ -161,7 +133,7 @@ func SHA256Hex(data []byte) string {
 }
 
 // ChunkFile reads a file and returns all chunks via FastCDC.
-func ChunkFile(filePath string, opts ChunkOptions) ([]ChunkData, error) {
+func ChunkFile(filePath string, opts sdktypes.ChunkOptions) ([]sdktypes.ChunkData, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -169,14 +141,14 @@ func ChunkFile(filePath string, opts ChunkOptions) ([]ChunkData, error) {
 	defer f.Close()
 
 	cdc := NewChunker(opts)
-	buf := make([]byte, 32*1024*1024) // 32 MiB read buffer
-	var chunks []ChunkData
+	buf := make([]byte, 32*1024*1024)
+	var chunks []sdktypes.ChunkData
 
 	for {
 		n, err := f.Read(buf)
 		if n > 0 {
 			for _, raw := range cdc.Push(buf[:n]) {
-				chunks = append(chunks, ChunkData{
+				chunks = append(chunks, sdktypes.ChunkData{
 					Hash: SHA256Hex(raw),
 					Data: raw,
 					Size: len(raw),
@@ -192,7 +164,7 @@ func ChunkFile(filePath string, opts ChunkOptions) ([]ChunkData, error) {
 	}
 
 	if last := cdc.Flush(); last != nil {
-		chunks = append(chunks, ChunkData{
+		chunks = append(chunks, sdktypes.ChunkData{
 			Hash: SHA256Hex(last),
 			Data: last,
 			Size: len(last),

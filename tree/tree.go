@@ -1,4 +1,4 @@
-package backup
+package tree
 
 import (
 	"bytes"
@@ -9,22 +9,11 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+
+	sdktypes "github.com/lighthouse-web3/baas-go-sdk/types"
 )
 
-// Canonical JSON Serialization
-//
-// Tree blobs are serialised with canonical JSON so every SDK language
-// produces byte-identical output (and therefore the same SHA-256 hash).
-//
-// Rules (subset of RFC 8785 / JCS):
-//  1. Object keys sorted lexicographically (by UTF-16 code units).
-//  2. No whitespace between tokens.
-//  3. Undefined / missing fields omitted entirely.
-//  4. Integers serialised without decimal point.
-//  5. Strings escaped with only the mandatory JSON escapes.
-//  6. UTF-8 encoding for the final byte buffer.
-
-// CanonicalStringify serialises any value to canonical JSON.
+// CanonicalStringify serializes any value to canonical JSON.
 func CanonicalStringify(v interface{}) string {
 	var buf bytes.Buffer
 	writeCanonical(&buf, reflect.ValueOf(v))
@@ -36,7 +25,6 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 		buf.WriteString("null")
 		return
 	}
-
 	for rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
 		if rv.IsNil() {
 			buf.WriteString("null")
@@ -44,7 +32,6 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 		}
 		rv = rv.Elem()
 	}
-
 	switch rv.Kind() {
 	case reflect.Bool:
 		if rv.Bool() {
@@ -52,13 +39,10 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 		} else {
 			buf.WriteString("false")
 		}
-
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		buf.WriteString(strconv.FormatInt(rv.Int(), 10))
-
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		buf.WriteString(strconv.FormatUint(rv.Uint(), 10))
-
 	case reflect.Float32, reflect.Float64:
 		f := rv.Float()
 		if math.IsInf(f, 0) || math.IsNaN(f) {
@@ -70,10 +54,8 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 		} else {
 			buf.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
 		}
-
 	case reflect.String:
 		writeCanonicalString(buf, rv.String())
-
 	case reflect.Slice, reflect.Array:
 		if rv.Kind() == reflect.Slice && rv.IsNil() {
 			buf.WriteString("null")
@@ -87,7 +69,6 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 			writeCanonical(buf, rv.Index(i))
 		}
 		buf.WriteByte(']')
-
 	case reflect.Map:
 		if rv.IsNil() {
 			buf.WriteString("null")
@@ -114,10 +95,8 @@ func writeCanonical(buf *bytes.Buffer, rv reflect.Value) {
 			first = false
 		}
 		buf.WriteByte('}')
-
 	case reflect.Struct:
 		writeCanonicalStruct(buf, rv)
-
 	default:
 		buf.WriteString("null")
 	}
@@ -131,18 +110,15 @@ type kvPair struct {
 func writeCanonicalStruct(buf *bytes.Buffer, rv reflect.Value) {
 	t := rv.Type()
 	var pairs []kvPair
-
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		if !field.IsExported() {
 			continue
 		}
-
 		fv := rv.Field(i)
 		tag := field.Tag.Get("json")
 		name := field.Name
 		omitempty := false
-
 		if tag != "" {
 			parts := splitTag(tag)
 			if parts[0] == "-" {
@@ -157,18 +133,12 @@ func writeCanonicalStruct(buf *bytes.Buffer, rv reflect.Value) {
 				}
 			}
 		}
-
 		if omitempty && isZeroValue(fv) {
 			continue
 		}
-
 		pairs = append(pairs, kvPair{key: name, val: fv})
 	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].key < pairs[j].key
-	})
-
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].key < pairs[j].key })
 	buf.WriteByte('{')
 	first := true
 	for _, p := range pairs {
@@ -247,25 +217,23 @@ func writeCanonicalString(buf *bytes.Buffer, s string) {
 	buf.WriteByte('"')
 }
 
-// ── Public API ──────────────────────────────────────────────────────────────
-
-// EncodeTree serialises tree nodes to canonical JSON bytes.
-func EncodeTree(nodes []TreeNode) []byte {
-	blob := TreeBlob{Nodes: nodes}
+// EncodeTree serializes tree nodes to canonical JSON bytes.
+func EncodeTree(nodes []sdktypes.TreeNode) []byte {
+	blob := sdktypes.TreeBlob{Nodes: nodes}
 	return []byte(CanonicalStringify(blob))
 }
 
-// DecodeTree deserialises a tree blob from JSON bytes.
-func DecodeTree(data []byte) (TreeBlob, error) {
-	var blob TreeBlob
+// DecodeTree deserializes a tree blob from JSON bytes.
+func DecodeTree(data []byte) (sdktypes.TreeBlob, error) {
+	var blob sdktypes.TreeBlob
 	if err := json.Unmarshal(data, &blob); err != nil {
 		return blob, err
 	}
 	return blob, nil
 }
 
-// HashTree serialises tree nodes and returns the SHA-256 hash and raw bytes.
-func HashTree(nodes []TreeNode) (hash string, data []byte) {
+// HashTree serializes tree nodes and returns the SHA-256 hash and raw bytes.
+func HashTree(nodes []sdktypes.TreeNode) (hash string, data []byte) {
 	data = EncodeTree(nodes)
 	h := sha256.Sum256(data)
 	hash = hex.EncodeToString(h[:])

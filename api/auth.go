@@ -1,4 +1,4 @@
-package backup
+package api
 
 import (
 	"encoding/hex"
@@ -8,16 +8,24 @@ import (
 
 	secp256k1 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	dcrdecdsa "github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
+	sdktypes "github.com/lighthouse-web3/baas-go-sdk/types"
 	"golang.org/x/crypto/sha3"
 )
 
-// WalletAdapter abstracts Ethereum wallet operations.
+// APIKeyPrefix is the prefix every Lighthouse API key carries.
+const APIKeyPrefix = "lh_"
+
+// HasAPIKeyPrefix reports whether the given token looks like a Lighthouse API key.
+func HasAPIKeyPrefix(token string) bool {
+	return strings.HasPrefix(token, APIKeyPrefix)
+}
+
+// WalletAdapter abstracts Ethereum wallet operations for SIWE.
 type WalletAdapter struct {
 	Address     string
 	SignMessage func(message string) (string, error)
 }
 
-// WalletFromPrivateKey creates a WalletAdapter from a hex-encoded secp256k1 private key.
 func WalletFromPrivateKey(privateKeyHex string) (*WalletAdapter, error) {
 	privKey, err := parsePrivateKey(privateKeyHex)
 	if err != nil {
@@ -34,7 +42,6 @@ func WalletFromPrivateKey(privateKeyHex string) (*WalletAdapter, error) {
 	}, nil
 }
 
-// WalletFromSigner creates a WalletAdapter from an address and external sign function.
 func WalletFromSigner(address string, signFn func(string) (string, error)) *WalletAdapter {
 	return &WalletAdapter{
 		Address:     address,
@@ -42,13 +49,7 @@ func WalletFromSigner(address string, signFn func(string) (string, error)) *Wall
 	}
 }
 
-// Authenticate performs the full SIWE authentication flow:
-//  1. Request nonce from server
-//  2. Build EIP-4361 message with the nonce
-//  3. Sign message with wallet
-//  4. Send message + signature to server → receive JWT
-//
-// The JWT is stored on the HttpClient for all subsequent calls.
+// Authenticate performs the full SIWE authentication flow and stores JWT.
 func Authenticate(http *HttpClient, wallet *WalletAdapter) (string, error) {
 	nonce, err := http.RequestNonce(strings.ToLower(wallet.Address))
 	if err != nil {
@@ -58,7 +59,7 @@ func Authenticate(http *HttpClient, wallet *WalletAdapter) (string, error) {
 	siweMsg := buildSIWEMessage(
 		nonce.Domain,
 		wallet.Address,
-		"Sign in to Backup Service",
+		"Sign in to Lighthouse Backup",
 		nonce.URI,
 		"1",
 		nonce.ChainID,
@@ -71,16 +72,59 @@ func Authenticate(http *HttpClient, wallet *WalletAdapter) (string, error) {
 		return "", fmt.Errorf("sign message: %w", err)
 	}
 
-	authResp, err := http.Verify(siweMsg, signature)
+	authResp, err := http.VerifySIWE(siweMsg, signature)
 	if err != nil {
-		return "", fmt.Errorf("verify: %w", err)
+		return "", fmt.Errorf("verify siwe: %w", err)
 	}
 
 	http.SetToken(authResp.Token)
 	return authResp.Token, nil
 }
 
-// ── Internal helpers ────────────────────────────────────────────────────────
+func RegisterWithEmail(http *HttpClient, email, password, displayName string) (sdktypes.EmailRegisterResponse, error) {
+	return http.EmailRegister(sdktypes.EmailRegisterRequest{
+		Email:       email,
+		Password:    password,
+		DisplayName: displayName,
+	})
+}
+
+func VerifyEmail(http *HttpClient, req sdktypes.EmailVerifyRequest) (sdktypes.EmailVerifyResponse, error) {
+	resp, err := http.EmailVerify(req)
+	if err != nil {
+		return resp, err
+	}
+	if resp.Token != "" {
+		http.SetToken(resp.Token)
+	}
+	return resp, nil
+}
+
+func LoginWithEmail(http *HttpClient, email, password string) (sdktypes.AuthResponse, error) {
+	resp, err := http.EmailLogin(sdktypes.EmailLoginRequest{Email: email, Password: password})
+	if err != nil {
+		return resp, err
+	}
+	if resp.Token != "" {
+		http.SetToken(resp.Token)
+	}
+	return resp, nil
+}
+
+func LinkWalletIdentity(http *HttpClient, walletAddress string) (sdktypes.LinkIdentityResponse, error) {
+	return http.LinkIdentity(sdktypes.LinkIdentityRequest{
+		Provider:        "siwe",
+		ProviderSubject: strings.ToLower(walletAddress),
+	})
+}
+
+func LinkEmailIdentity(http *HttpClient, email, password string) (sdktypes.LinkIdentityResponse, error) {
+	return http.LinkIdentity(sdktypes.LinkIdentityRequest{
+		Provider:        "email_password",
+		ProviderSubject: email,
+		Password:        password,
+	})
+}
 
 func keccak256(data []byte) []byte {
 	h := sha3.NewLegacyKeccak256()
@@ -104,7 +148,7 @@ func parsePrivateKey(hexKey string) (*secp256k1.PrivateKey, error) {
 
 func addressFromPubKey(pubKey *secp256k1.PublicKey) string {
 	uncompressed := pubKey.SerializeUncompressed()
-	hash := keccak256(uncompressed[1:]) // skip 0x04 prefix
+	hash := keccak256(uncompressed[1:])
 	addr := hex.EncodeToString(hash[12:])
 	return toChecksumAddress(addr)
 }
@@ -130,23 +174,16 @@ func toChecksumAddress(addrLower string) string {
 
 func signPersonalMessage(privKey *secp256k1.PrivateKey, message string) (string, error) {
 	hash := personalSignHash([]byte(message))
-
-	// dcrd SignCompact returns 65 bytes:
-	//   [0]     = recovery flag + 27
-	//   [1:33]  = R (big-endian, zero-padded)
-	//   [33:65] = S (big-endian, zero-padded)
 	sig := dcrdecdsa.SignCompact(privKey, hash, false)
 
-	// Ethereum format: R || S || V
 	ethSig := make([]byte, 65)
-	copy(ethSig[0:32], sig[1:33])  // R
-	copy(ethSig[32:64], sig[33:65]) // S
-	ethSig[64] = sig[0]             // V (27 or 28)
+	copy(ethSig[0:32], sig[1:33])
+	copy(ethSig[32:64], sig[33:65])
+	ethSig[64] = sig[0]
 
 	return "0x" + hex.EncodeToString(ethSig), nil
 }
 
-// buildSIWEMessage constructs an EIP-4361 compliant message.
 func buildSIWEMessage(domain, address, statement, uri, version string, chainID int, nonce, issuedAt string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s wants you to sign in with your Ethereum account:\n", domain)

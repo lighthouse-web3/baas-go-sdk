@@ -1,4 +1,4 @@
-package backup
+package pool
 
 import "sync"
 
@@ -34,8 +34,8 @@ func Parallel[T any](items []T, concurrency int, fn func(T) error) error {
 	close(ch)
 
 	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
+		wg       sync.WaitGroup
+		mu       sync.Mutex
 		firstErr error
 	)
 

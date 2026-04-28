@@ -1,4 +1,4 @@
-package backup
+package codec
 
 import (
 	"fmt"
@@ -31,10 +31,8 @@ func getDecoder() *zstd.Decoder {
 	return zstdDecoder
 }
 
-// maybeZstdCompress compresses raw with zstd and returns the smaller
-// representation. If compression does not shrink the data, raw is returned
-// as-is with an empty compression tag.
-func maybeZstdCompress(raw []byte) (stored []byte, compression string, uncompressedSize int) {
+// MaybeZstdCompress compresses raw with zstd and returns the smaller representation.
+func MaybeZstdCompress(raw []byte) (stored []byte, compression string, uncompressedSize int) {
 	uncompressedSize = len(raw)
 	compressed := getEncoder().EncodeAll(raw, make([]byte, 0, len(raw)))
 	if len(compressed) < len(raw) {
@@ -43,9 +41,8 @@ func maybeZstdCompress(raw []byte) (stored []byte, compression string, uncompres
 	return raw, "", uncompressedSize
 }
 
-// maybeDecompressStored decompresses stored bytes when compression is "zstd".
-// For empty or unrecognized compression tags, raw bytes are returned unchanged.
-func maybeDecompressStored(stored []byte, compression string) ([]byte, error) {
+// MaybeDecompressStored decompresses stored bytes when compression is "zstd".
+func MaybeDecompressStored(stored []byte, compression string) ([]byte, error) {
 	if compression == "" || compression == "none" {
 		return stored, nil
 	}
@@ -66,10 +63,9 @@ func looksLikeZstdFrame(b []byte) bool {
 		b[2] == zstdFrameMagic[2] && b[3] == zstdFrameMagic[3]
 }
 
-// maybeDecompressStoredOrInferZstd uses metadata first, then falls back to zstd
-// frame detection when compression tags are missing.
-func maybeDecompressStoredOrInferZstd(stored []byte, compression string) ([]byte, error) {
-	out, err := maybeDecompressStored(stored, compression)
+// MaybeDecompressStoredOrInferZstd uses metadata first, then falls back to zstd frame detection.
+func MaybeDecompressStoredOrInferZstd(stored []byte, compression string) ([]byte, error) {
+	out, err := MaybeDecompressStored(stored, compression)
 	if err != nil {
 		return nil, err
 	}
