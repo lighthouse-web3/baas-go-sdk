@@ -150,6 +150,16 @@ func (c *BackupClient) LinkIdentity(req sdktypes.LinkIdentityRequest) (sdktypes.
 
 // Backup backs up one or more paths into the configured workspace.
 func (c *BackupClient) Backup(paths []string, options *sdktypes.BackupOptions) (*sdktypes.Snapshot, error) {
+	if options == nil {
+		options = &sdktypes.BackupOptions{}
+	}
+	if options.SourceID == "" {
+		sourceID, err := getOrGenerateSourceID()
+		if err != nil {
+			return nil, err
+		}
+		options.SourceID = sourceID
+	}
 	if err := c.ensureAuth(); err != nil {
 		return nil, err
 	}

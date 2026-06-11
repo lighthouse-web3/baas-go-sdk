@@ -501,6 +501,7 @@ type Snapshot struct {
 	WorkspaceID  string            `json:"workspaceId"`
 	RootTreeHash string            `json:"rootTreeHash"`
 	Hostname     string            `json:"hostname"`
+	SourceID     string            `json:"sourceId"`
 	Paths        []string          `json:"paths"`
 	Description  string            `json:"description"`
 	Tags         map[string]string `json:"tags"`
@@ -519,6 +520,7 @@ type SnapshotListResponse struct {
 type SnapshotInput struct {
 	RootTreeHash string            `json:"rootTreeHash"`
 	Hostname     string            `json:"hostname,omitempty"`
+	SourceID     string            `json:"sourceId,omitempty"`
 	Paths        []string          `json:"paths,omitempty"`
 	Description  string            `json:"description,omitempty"`
 	Tags         map[string]string `json:"tags,omitempty"`
@@ -632,6 +634,7 @@ type BackupOptions struct {
 	WorkspaceID            string
 	Description            string
 	Hostname               string
+	SourceID               string
 	Tags                   map[string]string
 	ParentSnapshotID       string
 	OnProgress             func(ProgressEvent)
