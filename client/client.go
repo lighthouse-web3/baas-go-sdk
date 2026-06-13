@@ -3,6 +3,8 @@ package client
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/lighthouse-web3/baas-go-sdk/api"
 	"github.com/lighthouse-web3/baas-go-sdk/pipeline"
@@ -154,7 +156,15 @@ func (c *BackupClient) Backup(paths []string, options *sdktypes.BackupOptions) (
 		options = &sdktypes.BackupOptions{}
 	}
 	if options.SourceID == "" {
-		sourceID, err := getOrGenerateSourceID()
+		targetPath := "."
+		if len(paths) > 0 {
+			targetPath = paths[0]
+			if stat, err := os.Stat(targetPath); err == nil && !stat.IsDir() {
+				targetPath = filepath.Dir(targetPath)
+			}
+		}
+
+		sourceID, err := getOrGenerateSourceID(targetPath)
 		if err != nil {
 			return nil, err
 		}

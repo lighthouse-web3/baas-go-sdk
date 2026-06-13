@@ -7,13 +7,8 @@ import (
 	"path/filepath"
 )
 
-func getOrGenerateSourceID() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	configDir := filepath.Join(home, ".lighthouse", "baas")
+func getOrGenerateSourceID(targetPath string) (string, error) {
+	configDir := filepath.Join(targetPath, ".lighthouse")
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return "", err
 	}
