@@ -3,6 +3,8 @@ package client
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/lighthouse-web3/baas-go-sdk/api"
 	"github.com/lighthouse-web3/baas-go-sdk/pipeline"
@@ -150,6 +152,24 @@ func (c *BackupClient) LinkIdentity(req sdktypes.LinkIdentityRequest) (sdktypes.
 
 // Backup backs up one or more paths into the configured workspace.
 func (c *BackupClient) Backup(paths []string, options *sdktypes.BackupOptions) (*sdktypes.Snapshot, error) {
+	if options == nil {
+		options = &sdktypes.BackupOptions{}
+	}
+	if options.SourceID == "" {
+		targetPath := "."
+		if len(paths) > 0 {
+			targetPath = paths[0]
+			if stat, err := os.Stat(targetPath); err == nil && !stat.IsDir() {
+				targetPath = filepath.Dir(targetPath)
+			}
+		}
+
+		sourceID, err := getOrGenerateSourceID(targetPath)
+		if err != nil {
+			return nil, err
+		}
+		options.SourceID = sourceID
+	}
 	if err := c.ensureAuth(); err != nil {
 		return nil, err
 	}

@@ -596,6 +596,7 @@ func createSnapshotRecord(
 	snapshot, err := http.CreateSnapshot(sdktypes.SnapshotInput{
 		RootTreeHash: rootTreeHash,
 		Hostname:     hostname,
+		SourceID:     options.SourceID,
 		Paths:        paths,
 		Description:  options.Description,
 		Tags:         options.Tags,
